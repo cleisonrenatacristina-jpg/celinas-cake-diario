@@ -71,6 +71,20 @@ const CAD_BASE=[
 ];
 
 const fmt=v=>`R$ ${Number(v).toFixed(2).replace(".",",")}`;
+
+// Acessórios padrão — editáveis pelo usuário
+const ACESSORIOS_DEFAULT=[
+  {id:"a1",nome:"Topo de Bolo Personalizado",preco:25,icon:"🎂"},
+  {id:"a2",nome:"Vela de Aniversário",preco:8,icon:"🕯️"},
+  {id:"a3",nome:"Laço Decorativo",preco:5,icon:"🎀"},
+  {id:"a4",nome:"Caixa Presente",preco:15,icon:"📦"},
+  {id:"a5",nome:"Fita Personalizada",preco:10,icon:"🎗️"},
+  {id:"a6",nome:"Plaquinha Personalizada",preco:18,icon:"🪧"},
+  {id:"a7",nome:"Flores Decorativas",preco:20,icon:"🌸"},
+  {id:"a8",nome:"Drip de Chocolate",preco:12,icon:"🍫"},
+  {id:"a9",nome:"Granulado Especial",preco:5,icon:"✨"},
+  {id:"a10",nome:"Embrulho para Presente",preco:8,icon:"🎁"},
+];
 const getDias=(dr,ag)=>{if(!dr)return null;return Math.ceil((new Date(dr+"T00:00:00")-new Date(ag.toDateString()))/86400000);};
 const getPrazo=(d,s)=>{if(s==="entregue"||d===null)return null;if(d<0)return{label:`${Math.abs(d)}d atrasado`,color:"#e05555",bg:"#fff0f0",icon:"🚨"};if(d===0)return{label:"Hoje!",color:"#e07020",bg:"#fff5e0",icon:"⚡"};if(d===1)return{label:"Amanhã",color:AM,bg:"#fffbe6",icon:"⏰"};if(d<=3)return{label:`${d}d`,color:ROSA,bg:RC,icon:"📅"};return{label:`${d}d`,color:"#888",bg:"#f5f5f5",icon:"📅"};};
 const getBadge=o=>({bg:o.pago?"#eaf5f1":o.pagoParcial?"#fff8ec":"#fff5e0",color:o.pago?VE:o.pagoParcial?AM:"#e8a020",text:o.pago?"💰 Pago":o.pagoParcial?`💛 Entrada ${fmt(o.entrada||0)}`:"⏳ A pagar"});
@@ -219,11 +233,14 @@ function WhatsAppPage({onSave}){
   );
 }
 
-function PrecosPage({cardapio,precos,setPrecos,extrasCardapio,setExtrasCardapio}){
+function PrecosPage({cardapio,precos,setPrecos,extrasCardapio,setExtrasCardapio,acessoriosBase=[],setAcessoriosBase}){
   const[catF,setCatF]=useState("Todas");
   const[busca,setBusca]=useState("");
   const[saved,setSaved]=useState(false);
   const[aba,setAba]=useState("precos");
+  const[novoAcessNome,setNovoAcessNome]=useState("");
+  const[novoAcessPreco,setNovoAcessPreco]=useState("");
+  const[novoAcessIcon,setNovoAcessIcon]=useState("🎁");
   const[novoNome,setNovoNome]=useState("");
   const[novoPreco,setNovoPreco]=useState("");
   const[novaCat,setNovaCat]=useState("");
@@ -247,20 +264,54 @@ function PrecosPage({cardapio,precos,setPrecos,extrasCardapio,setExtrasCardapio}
   const addProduto=()=>{
     if(!novoNome.trim())return setErrNovo("Informe o nome do produto.");
     if(!novoPreco||isNaN(parseFloat(novoPreco)))return setErrNovo("Informe um preço válido.");
+    // se for acessório, salva direto em acessoriosBase
+    if(novaUnidade==="acessorio"){
+      const novoAcess={id:"a"+Date.now(),nome:novoNome.trim(),preco:parseFloat(novoPreco),icon:novaObs.trim()||"🎁"};
+      if(typeof setAcessoriosBase==="function") setAcessoriosBase(prev=>[...prev,novoAcess]);
+      setNovoNome("");setNovoPreco("");setNovaCat("");setNovaObs("");setNovaUnidade("un");setCatCustom("");setErrNovo("");
+      setSaved(true);setTimeout(()=>setSaved(false),2000);
+      setAba("acessorios");
+      return;
+    }
     if(!catFinal)return setErrNovo("Selecione ou crie uma categoria.");
     if(cardapio.find(p=>p.nome.toLowerCase()===novoNome.trim().toLowerCase()))return setErrNovo("Já existe um produto com esse nome.");
     const novo={cat:catFinal,nome:novoNome.trim(),preco:parseFloat(novoPreco),obs:novaObs.trim(),unidade:novaUnidade,_extra:true};
     setExtrasCardapio(prev=>[...prev,novo]);
     setPrecos(prev=>({...prev,[novo.nome]:novo.preco}));
-    setNovoNome("");setNovoPreco("");setNovaCat("");setNovaObs("");setCatCustom("");setErrNovo("");
+    setNovoNome("");setNovoPreco("");setNovaCat("");setNovaObs("");setNovaUnidade("un");setCatCustom("");setErrNovo("");
     setSaved(true);setTimeout(()=>setSaved(false),2000);
     setAba("precos");
   };
 
   const delExtra=(nome)=>{
-    if(!window.confirm(`Remover "${nome}" do cardápio?`))return;
-    setExtrasCardapio(prev=>prev.filter(p=>p.nome!==nome));
+    const isBase=!!CAD_BASE.find(p=>p.nome===nome);
+    const msg=isBase
+      ?`Ocultar "${nome}" do cardápio? (Produto original do sistema — será ocultado mas não excluído permanentemente)`
+      :`Remover "${nome}" do cardápio?`;
+    if(!window.confirm(msg))return;
+    if(isBase){
+      // Produto base: adiciona na lista de ocultos
+      setExtrasCardapio(prev=>{
+        const jaOculto=prev.find(p=>p.nome===nome&&p._oculto);
+        return jaOculto?prev:[...prev,{nome,cat:"__oculto__",_oculto:true}];
+      });
+    } else {
+      setExtrasCardapio(prev=>prev.filter(p=>p.nome!==nome));
+    }
     setPrecos(prev=>{const n={...prev};delete n[nome];return n;});
+    setSaved(true);setTimeout(()=>setSaved(false),2000);
+  };
+
+  const delCategoria=(cat)=>{
+    const prodsCat=cardapio.filter(p=>p.cat===cat);
+    const temBase=prodsCat.some(p=>!extrasCardapio.find(e=>e.nome===p.nome));
+    const msg=temBase
+      ?`Excluir a categoria "${cat}" e todos os seus produtos personalizados? (Produtos originais do sistema não serão removidos, apenas ficarão sem categoria visível)`
+      :`Excluir a categoria "${cat}" e todos os seus ${prodsCat.length} produto(s)?`;
+    if(!window.confirm(msg))return;
+    // remove apenas extras dessa categoria
+    setExtrasCardapio(prev=>prev.filter(p=>p.cat!==cat));
+    setSaved(true);setTimeout(()=>setSaved(false),2000);
   };
 
   return(
@@ -272,11 +323,80 @@ function PrecosPage({cardapio,precos,setPrecos,extrasCardapio,setExtrasCardapio}
         </div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
           {saved&&<span style={{fontSize:12,color:VE,fontWeight:700}}>✅ Salvo!</span>}
+          <button onClick={()=>setAba(aba==="acessorios"?"precos":"acessorios")} style={{padding:"8px 14px",borderRadius:22,border:`2px solid ${aba==="acessorios"?ROSA:RM}`,background:aba==="acessorios"?ROSA:"#fff",color:aba==="acessorios"?"#fff":ROSA,fontSize:12,fontWeight:700,cursor:"pointer"}}>
+            {aba==="acessorios"?"← Voltar":"🎀 Acessórios"}
+          </button>
           <button onClick={()=>setAba(aba==="novo"?"precos":"novo")} style={{padding:"8px 16px",borderRadius:22,border:`2px solid ${aba==="novo"?RE:RM}`,background:aba==="novo"?RE:"#fff",color:aba==="novo"?"#fff":RE,fontSize:12,fontWeight:700,cursor:"pointer"}}>
             {aba==="novo"?"← Voltar":"＋ Novo Produto"}
           </button>
         </div>
       </div>
+
+      {aba==="acessorios"&&(
+        <div style={{background:"#fff",borderRadius:18,padding:24,boxShadow:"0 4px 24px rgba(180,48,74,.10)",marginBottom:20,border:`2px solid ${RM}`}}>
+          <h3 style={{margin:"0 0 18px",color:ROSA,fontSize:16}}>🎀 Gerenciar Acessórios & Extras</h3>
+          <p style={{fontSize:12,color:"#aaa",marginBottom:16}}>Esses itens aparecem no pedido para personalizar bolos e outros produtos.</p>
+
+          {/* Lista de acessórios */}
+          <div style={{marginBottom:20}}>
+            {acessoriosBase.map((a,i)=>(
+              <div key={a.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:12,background:i%2===0?"#fdf9fb":"#fff",border:`1.5px solid ${RM}`,marginBottom:8}}>
+                <span style={{fontSize:22}}>{a.icon||"🎁"}</span>
+                <div style={{flex:1}}>
+                  <input value={a.nome} onChange={e=>setAcessoriosBase(prev=>prev.map(x=>x.id===a.id?{...x,nome:e.target.value}:x))}
+                    style={{border:"none",background:"transparent",fontSize:13,fontWeight:600,color:"#333",outline:"none",width:"100%"}}/>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:4,background:RC,borderRadius:9,padding:"5px 10px",border:`1.5px solid ${RM}`}}>
+                  <span style={{fontSize:11,color:"#aaa"}}>R$</span>
+                  <input type="number" step="0.01" min="0" value={a.preco}
+                    onChange={e=>setAcessoriosBase(prev=>prev.map(x=>x.id===a.id?{...x,preco:parseFloat(e.target.value)||0}:x))}
+                    style={{width:60,border:"none",background:"transparent",fontSize:14,fontWeight:700,color:RE,outline:"none",textAlign:"right"}}/>
+                </div>
+                <button onClick={()=>setAcessoriosBase(prev=>prev.filter(x=>x.id!==a.id))}
+                  style={{padding:"5px 8px",borderRadius:8,border:"1.5px solid #ffd0cc",background:"#fff5f4",color:"#e07070",fontSize:13,cursor:"pointer"}}>🗑️</button>
+              </div>
+            ))}
+          </div>
+
+          {/* Adicionar novo acessório */}
+          <div style={{background:RC,borderRadius:14,padding:"16px 18px",border:`1.5px solid ${RM}`}}>
+            <div style={{fontWeight:700,fontSize:13,color:ROSA,marginBottom:12}}>➕ Novo acessório</div>
+            <div style={{display:"grid",gridTemplateColumns:"auto 1fr auto",gap:10,alignItems:"end",flexWrap:"wrap"}}>
+              <div>
+                <label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Ícone</label>
+                <input value={novoAcessIcon} onChange={e=>setNovoAcessIcon(e.target.value)}
+                  style={{width:52,padding:"9px 8px",borderRadius:10,border:`1.5px solid ${RM}`,fontSize:20,textAlign:"center",outline:"none"}}/>
+              </div>
+              <div>
+                <label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Nome *</label>
+                <input value={novoAcessNome} onChange={e=>setNovoAcessNome(e.target.value)}
+                  onKeyDown={e=>e.key==="Enter"&&document.getElementById("btn-add-acess").click()}
+                  placeholder="Ex: Topo de Bolo Personalizado"
+                  style={{width:"100%",padding:"9px 12px",borderRadius:10,border:`1.5px solid ${RM}`,fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+              </div>
+              <div>
+                <label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Preço (R$)</label>
+                <div style={{display:"flex",alignItems:"center",gap:4,padding:"9px 12px",borderRadius:10,border:`1.5px solid ${AM}`,background:"#fffbe6"}}>
+                  <span style={{fontSize:11,color:AM}}>R$</span>
+                  <input type="number" step="0.01" min="0" value={novoAcessPreco} onChange={e=>setNovoAcessPreco(e.target.value)}
+                    onKeyDown={e=>e.key==="Enter"&&document.getElementById("btn-add-acess").click()}
+                    placeholder="0,00"
+                    style={{width:70,border:"none",background:"transparent",fontSize:14,fontWeight:700,color:AM,outline:"none"}}/>
+                </div>
+              </div>
+            </div>
+            <button id="btn-add-acess" onClick={()=>{
+              if(!novoAcessNome.trim()||!novoAcessPreco)return;
+              setAcessoriosBase(prev=>[...prev,{id:"a"+Date.now(),nome:novoAcessNome.trim(),preco:parseFloat(novoAcessPreco)||0,icon:novoAcessIcon||"🎁"}]);
+              setNovoAcessNome("");setNovoAcessPreco("");setNovoAcessIcon("🎁");
+              setSaved(true);setTimeout(()=>setSaved(false),2000);
+            }} disabled={!novoAcessNome.trim()||!novoAcessPreco}
+              style={{marginTop:12,width:"100%",padding:11,borderRadius:10,border:"none",background:novoAcessNome.trim()&&novoAcessPreco?`linear-gradient(135deg,${ROSA},${RE})`:"#ccc",color:"#fff",fontSize:13,fontWeight:700,cursor:novoAcessNome.trim()&&novoAcessPreco?"pointer":"not-allowed"}}>
+              ✅ Adicionar Acessório
+            </button>
+          </div>
+        </div>
+      )}
 
       {aba==="novo"&&(
         <div style={{background:"#fff",borderRadius:18,padding:24,boxShadow:"0 4px 24px rgba(180,48,74,.10)",marginBottom:20,border:`2px solid ${RM}`}}>
@@ -294,19 +414,20 @@ function PrecosPage({cardapio,precos,setPrecos,extrasCardapio,setExtrasCardapio}
               </div>
             </div>
             <div>
-              <label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:1}}>Observação / Sabores</label>
-              <input value={novaObs} onChange={e=>setNovaObs(e.target.value)} placeholder="Ex: Disponível em 3 sabores" style={{width:"100%",padding:"10px 14px",borderRadius:10,border:`1.5px solid ${RM}`,fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+              <label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:1}}>{novaUnidade==="acessorio"?"Emoji / Ícone":"Observação / Sabores"}</label>
+              <input value={novaObs} onChange={e=>setNovaObs(e.target.value)} placeholder={novaUnidade==="acessorio"?"Ex: 🎂 🎀 🕯️ (coloque um emoji)":"Ex: Disponível em 3 sabores"} style={{width:"100%",padding:"10px 14px",borderRadius:10,border:`1.5px solid ${RM}`,fontSize:13,outline:"none",boxSizing:"border-box"}}/>
             </div>
             <div>
               <label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:1}}>Unidade de Venda *</label>
               <div style={{display:"flex",gap:8}}>
-                {[{v:"un",l:"🔢 Por unidade/qtd"},{v:"kg",l:"⚖️ Por kg (peso)"}].map(u=>(
+                {[{v:"un",l:"🔢 Por unidade/qtd"},{v:"kg",l:"⚖️ Por kg (peso)"},{v:"acessorio",l:"🎀 Acessório/Extra"}].map(u=>(
                   <button key={u.v} type="button" onClick={()=>setNovaUnidade(u.v)} style={{flex:1,padding:"9px 8px",borderRadius:10,border:"1.5px solid",borderColor:novaUnidade===u.v?RE:"#f0dde4",background:novaUnidade===u.v?RC:"#fff",color:novaUnidade===u.v?RE:"#aaa",fontSize:12,fontWeight:700,cursor:"pointer"}}>{u.l}</button>
                 ))}
               </div>
               {novaUnidade==="kg"&&<div style={{marginTop:6,fontSize:11,color:AM,background:"#fff8ec",padding:"6px 10px",borderRadius:8,border:`1px solid ${AM}`}}>⚖️ O cliente informará o peso (kg) na hora do pedido e o valor será calculado automaticamente.</div>}
+              {novaUnidade==="acessorio"&&<div style={{marginTop:6,fontSize:11,color:ROSA,background:RC,padding:"6px 10px",borderRadius:8,border:`1px solid ${RM}`}}>🎀 Será salvo como Acessório/Extra e aparecerá na hora de criar pedidos para personalizar bolos e outros produtos. Use o campo "Emoji/Ícone" para escolher um emoji.</div>}
             </div>
-            <div style={{gridColumn:"1/-1"}}>
+            {novaUnidade!=="acessorio"&&<div style={{gridColumn:"1/-1"}}>
               <label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:1}}>Categoria *</label>
               <select value={novaCat} onChange={e=>setNovaCat(e.target.value)} style={{width:"100%",padding:"10px 14px",borderRadius:10,border:`1.5px solid ${RM}`,fontSize:13,outline:"none",color:novaCat?"#333":"#aaa",background:"#fff",marginBottom:8}}>
                 <option value="">— Selecione uma categoria —</option>
@@ -316,7 +437,7 @@ function PrecosPage({cardapio,precos,setPrecos,extrasCardapio,setExtrasCardapio}
               {novaCat==="__nova__"&&(
                 <input value={catCustom} onChange={e=>setCatCustom(e.target.value)} placeholder="Nome da nova categoria" style={{width:"100%",padding:"10px 14px",borderRadius:10,border:`1.5px solid ${AM}`,fontSize:13,outline:"none",boxSizing:"border-box",background:"#fffbe6"}}/>
               )}
-            </div>
+            </div>}
           </div>
           {errNovo&&<div style={{background:"#fff0f0",border:"1.5px solid #e07070",borderRadius:10,padding:"10px 14px",fontSize:12,color:"#e05555",marginBottom:12}}>⚠️ {errNovo}</div>}
           {novoNome&&novoPreco&&catFinal&&(
@@ -357,9 +478,19 @@ function PrecosPage({cardapio,precos,setPrecos,extrasCardapio,setExtrasCardapio}
           const temExtras=items.some(p=>(extrasCardapio||[]).find(e=>e.nome===p.nome));
           return(
             <div key={cat} style={{background:"#fff",borderRadius:16,marginBottom:14,overflow:"hidden",boxShadow:"0 2px 12px rgba(180,48,74,.07)"}}>
-              <div style={{background:temExtras?"linear-gradient(135deg,#7a5c9b,#b07ad4)":`linear-gradient(135deg,${RE},${ROSA})`,padding:"11px 18px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{background:temExtras?"linear-gradient(135deg,#7a5c9b,#b07ad4)":`linear-gradient(135deg,${RE},${ROSA})`,padding:"11px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
                 <span style={{color:"#fff",fontWeight:700,fontSize:14}}>{cat}{temExtras?" ✨":""}</span>
-                <span style={{color:"rgba(255,255,255,.7)",fontSize:11}}>{items.length} produto(s)</span>
+                <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                  <span style={{color:"rgba(255,255,255,.7)",fontSize:11}}>{items.length} produto(s)</span>
+                  <button onClick={()=>{setAba("novo");setNovaCat(cat);}} title="Adicionar produto nesta categoria"
+                    style={{padding:"3px 10px",borderRadius:20,border:"1.5px solid rgba(255,255,255,.5)",background:"rgba(255,255,255,.2)",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                    ＋ Produto
+                  </button>
+                  <button onClick={()=>delCategoria(cat)} title="Excluir categoria"
+                    style={{padding:"3px 8px",borderRadius:20,border:"1.5px solid rgba(255,100,100,.6)",background:"rgba(220,50,50,.25)",color:"#ffcccc",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                    🗑️
+                  </button>
+                </div>
               </div>
               {items.map((p,i)=>{
                 const isExtra=!!(extrasCardapio||[]).find(e=>e.nome===p.nome);
@@ -385,7 +516,7 @@ function PrecosPage({cardapio,precos,setPrecos,extrasCardapio,setExtrasCardapio}
                         </div>
                       </div>
                       {alt&&!isExtra&&<button onClick={()=>{if(orig)setPrecos(prev=>({...prev,[p.nome]:orig}));}} style={{padding:"4px 8px",borderRadius:8,border:"1.5px solid #f0dde4",background:"#fff",color:"#aaa",fontSize:11,cursor:"pointer"}}>↩️</button>}
-                      {isExtra&&<button onClick={()=>delExtra(p.nome)} style={{padding:"4px 8px",borderRadius:8,border:"1.5px solid #ffd0cc",background:"#fff5f4",color:"#e07070",fontSize:13,cursor:"pointer"}}>🗑️</button>}
+                      <button onClick={()=>delExtra(p.nome)} style={{padding:"4px 8px",borderRadius:8,border:"1.5px solid #ffd0cc",background:"#fff5f4",color:"#e07070",fontSize:13,cursor:"pointer"}} title={isExtra?"Remover produto":"Ocultar produto do cardápio"}>🗑️</button>
                     </div>
                   </div>
                 );
@@ -408,13 +539,23 @@ function PagBtn({order,onUpdate}){
 function PedidoCard({o,idx,agora,isDuplicata,onStatus,onPagto,onEdit,onDelete}){
   const st=ST[o.status]||ST.pendente;const dias=getDias(o.data_retirada,agora);const prazo=getPrazo(dias,o.status);const bp=getBadge(o);
   const totalComFrete=(o.valor||0)+(o.frete||0);
-  return(<div style={{background:"#fff",borderRadius:16,padding:"16px 18px",boxShadow:"0 2px 12px rgba(180,48,74,.07)",borderLeft:`5px solid ${prazo?.color||st.color}`,display:"flex",gap:14,alignItems:"flex-start",flexWrap:"wrap",marginBottom:12}}>{o.status!=="entregue"&&<div style={{display:"flex",flexDirection:"column",alignItems:"center",minWidth:34,gap:2,paddingTop:2}}><div style={{width:30,height:30,borderRadius:"50%",background:prazo?.color||RM,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:13}}>{idx+1}</div><div style={{fontSize:9,color:"#ccc",textTransform:"uppercase"}}>fila</div></div>}<div style={{flex:1,minWidth:180}}><div style={{display:"flex",alignItems:"center",gap:7,marginBottom:5,flexWrap:"wrap"}}><span style={{fontSize:16}}>{st.icon}</span><span style={{fontWeight:700,fontSize:15}}>{o.cliente}</span>{isDuplicata&&<span style={{padding:"2px 7px",borderRadius:20,fontSize:11,fontWeight:700,background:"#fff8ec",color:"#c47a00",border:"1px solid #e8a020"}}>⚠️ duplicado?</span>}<span style={{padding:"2px 7px",borderRadius:20,fontSize:11,fontWeight:700,background:st.bg,color:st.color}}>{st.label}</span><span style={{padding:"2px 7px",borderRadius:20,fontSize:11,fontWeight:700,background:bp.bg,color:bp.color}}>{bp.text}</span>{prazo&&<span style={{padding:"2px 7px",borderRadius:20,fontSize:11,fontWeight:700,background:prazo.bg,color:prazo.color}}>{prazo.icon} {prazo.label}</span>}</div><div style={{fontSize:13,color:"#555",marginBottom:3}}>🥚 {o.itens}</div><div style={{display:"flex",gap:10,fontSize:11,color:"#999",flexWrap:"wrap"}}>{o.telefone&&<span>📞 {o.telefone}</span>}{o.data_retirada&&<span>📅 {new Date(o.data_retirada+"T12:00").toLocaleDateString("pt-BR")}{dias!==null&&o.status!=="entregue"?` · ${dias<0?Math.abs(dias)+"d atrasado":dias===0?"hoje":dias+"d restantes"}`:""}</span>}{o.valor!=null&&<span>💵 {fmt(o.valor)}{o.frete>0?` + 🚚 ${fmt(o.frete)} = ${fmt(totalComFrete)}`:""}</span>}{o.endereco&&<span>📍 {o.endereco}</span>}</div>{o.observacoes&&<div style={{marginTop:4,fontSize:11,color:"#bbb",fontStyle:"italic"}}>📝 {o.observacoes}</div>}</div><div style={{display:"flex",flexDirection:"column",gap:5,minWidth:155}}><div style={{fontSize:10,color:"#ccc",textTransform:"uppercase",letterSpacing:1}}>Status</div>{Object.entries(ST).map(([k,v])=><button key={k} onClick={()=>onStatus(o.id,k)} style={{padding:"4px 10px",borderRadius:8,border:"1.5px solid",borderColor:o.status===k?v.color:"#f0dde4",background:o.status===k?v.bg:"#fff",color:o.status===k?v.color:"#bbb",fontSize:11,fontWeight:700,cursor:"pointer",textAlign:"left"}}>{v.icon} {v.label}</button>)}<div style={{marginTop:4}}><div style={{fontSize:10,color:"#ccc",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Pagamento</div><PagBtn order={{...o,valor:totalComFrete}} onUpdate={onPagto}/></div><div style={{display:"flex",gap:5,marginTop:4}}><button onClick={()=>onEdit(o)} style={{flex:1,padding:"5px 0",borderRadius:8,border:`1.5px solid ${RM}`,background:RC,color:RE,fontSize:11,cursor:"pointer"}}>✏️</button><button onClick={()=>onDelete(o.id)} style={{flex:1,padding:"5px 0",borderRadius:8,border:"1.5px solid #ffd0cc",background:"#fff5f4",color:"#e07070",fontSize:11,cursor:"pointer"}}>🗑️</button></div></div></div>);
+  return(<div style={{background:"#fff",borderRadius:16,padding:"16px 18px",boxShadow:"0 2px 12px rgba(180,48,74,.07)",borderLeft:`5px solid ${prazo?.color||st.color}`,display:"flex",gap:14,alignItems:"flex-start",flexWrap:"wrap",marginBottom:12}}>{o.status!=="entregue"&&<div style={{display:"flex",flexDirection:"column",alignItems:"center",minWidth:34,gap:2,paddingTop:2}}><div style={{width:30,height:30,borderRadius:"50%",background:prazo?.color||RM,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:13}}>{idx+1}</div><div style={{fontSize:9,color:"#ccc",textTransform:"uppercase"}}>fila</div></div>}<div style={{flex:1,minWidth:180}}><div style={{display:"flex",alignItems:"center",gap:7,marginBottom:5,flexWrap:"wrap"}}><span style={{fontSize:16}}>{st.icon}</span><span style={{fontWeight:700,fontSize:15}}>{o.cliente}</span>{isDuplicata&&<span style={{padding:"2px 7px",borderRadius:20,fontSize:11,fontWeight:700,background:"#fff8ec",color:"#c47a00",border:"1px solid #e8a020"}}>⚠️ duplicado?</span>}<span style={{padding:"2px 7px",borderRadius:20,fontSize:11,fontWeight:700,background:st.bg,color:st.color}}>{st.label}</span><span style={{padding:"2px 7px",borderRadius:20,fontSize:11,fontWeight:700,background:bp.bg,color:bp.color}}>{bp.text}</span>{prazo&&<span style={{padding:"2px 7px",borderRadius:20,fontSize:11,fontWeight:700,background:prazo.bg,color:prazo.color}}>{prazo.icon} {prazo.label}</span>}</div><div style={{fontSize:13,color:"#555",marginBottom:3}}>🥚 {o.itens}</div><div style={{display:"flex",gap:10,fontSize:11,color:"#999",flexWrap:"wrap"}}>{o.telefone&&<span>📞 {o.telefone}</span>}{o.data_retirada&&<span>📅 {new Date(o.data_retirada+"T12:00").toLocaleDateString("pt-BR")}{dias!==null&&o.status!=="entregue"?` · ${dias<0?Math.abs(dias)+"d atrasado":dias===0?"hoje":dias+"d restantes"}`:""}</span>}{o.valor!=null&&<span>💵 {fmt(o.valor)}{o.frete>0?` + 🚚 ${fmt(o.frete)} = ${fmt(totalComFrete)}`:""}</span>}{o.endereco&&<span>📍 {o.endereco}</span>}</div>{o.observacoes&&<div style={{marginTop:4,fontSize:11,color:"#bbb",fontStyle:"italic"}}>📝 {o.observacoes}</div>}
+{o.acessoriosSel&&o.acessoriosSel.length>0&&(
+  <div style={{marginTop:4,display:"flex",gap:4,flexWrap:"wrap"}}>
+    {o.acessoriosSel.map((a,ai)=>(
+      <span key={ai} style={{padding:"2px 8px",borderRadius:20,background:RC,color:ROSA,fontSize:10,fontWeight:700,border:`1px solid ${RM}`}}>
+        {a.icon||"🎁"} {a.qtd>1?a.qtd+"x ":""}{a.nome} {fmt(a.preco*(a.qtd||1))}
+      </span>
+    ))}
+  </div>
+)}</div><div style={{display:"flex",flexDirection:"column",gap:5,minWidth:155}}><div style={{fontSize:10,color:"#ccc",textTransform:"uppercase",letterSpacing:1}}>Status</div>{Object.entries(ST).map(([k,v])=><button key={k} onClick={()=>onStatus(o.id,k)} style={{padding:"4px 10px",borderRadius:8,border:"1.5px solid",borderColor:o.status===k?v.color:"#f0dde4",background:o.status===k?v.bg:"#fff",color:o.status===k?v.color:"#bbb",fontSize:11,fontWeight:700,cursor:"pointer",textAlign:"left"}}>{v.icon} {v.label}</button>)}<div style={{marginTop:4}}><div style={{fontSize:10,color:"#ccc",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Pagamento</div><PagBtn order={{...o,valor:totalComFrete}} onUpdate={onPagto}/></div><div style={{display:"flex",gap:5,marginTop:4}}><button onClick={()=>onEdit(o)} style={{flex:1,padding:"5px 0",borderRadius:8,border:`1.5px solid ${RM}`,background:RC,color:RE,fontSize:11,cursor:"pointer"}}>✏️</button><button onClick={()=>onDelete(o.id)} style={{flex:1,padding:"5px 0",borderRadius:8,border:"1.5px solid #ffd0cc",background:"#fff5f4",color:"#e07070",fontSize:11,cursor:"pointer"}}>🗑️</button></div></div></div>);
 }
 
-function FormModal({initial,onSave,onClose,cardapio}){
+function FormModal({initial,onSave,onClose,cardapio,acessorios=[]}){
   const parseIni=()=>{if(!initial?.itens)return[];return initial.itens.split(" + ").reduce((acc,parte)=>{const m=parte.match(/^(\d+)x\s+(.+)$/);const nome=m?m[2].trim():parte.trim();const qtd=m?parseInt(m[1]):1;const prod=cardapio.find(p=>p.nome===nome);if(prod)acc.push({...prod,qtd});return acc;},[]);};
   const[f,setF]=useState({cliente:"",telefone:"",data_retirada:"",tipo_entrega:"retirada",endereco:"",observacoes:"",forma_pagamento:"PIX",itens:"",valor:"",frete:0,pago:false,pagoParcial:false,entrada:0,...initial});
   const[sel,setSel]=useState(parseIni);const[busca,setBusca]=useState("");const[cat,setCat]=useState("Todas");
+  const[extSel,setExtSel]=useState(()=>(initial?.acessoriosSel||[]).map(a=>({...a})));
   const[statusPag,setStatusPag]=useState(()=>initial?.pago?"pago":initial?.pagoParcial?"parcial":"nao_pago");
   const[entradaInput,setEntradaInput]=useState(()=>initial?.entrada>0?String(initial.entrada):"");
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
@@ -426,11 +567,15 @@ function FormModal({initial,onSave,onClose,cardapio}){
   const setPeso=(nome,p)=>setSel(prev=>prev.map(s=>s.nome===nome?{...s,peso:Math.max(0.1,parseFloat(p)||0.1)}:s));
   const getPrecoItem=p=>isKg(p)?p.preco*(p.peso||1):p.preco*(p.qtd||1);
   const subtotal=sel.reduce((s,p)=>s+getPrecoItem(p),0);
+  const subtotalExt=extSel.reduce((s,a)=>s+(a.preco*(a.qtd||1)),0);
+  const togExt=a=>{setExtSel(prev=>{const ex=prev.find(x=>x.id===a.id);return ex?prev.filter(x=>x.id!==a.id):[...prev,{...a,qtd:1}];});};
+  const setExtQtd=(id,q)=>setExtSel(prev=>prev.map(x=>x.id===id?{...x,qtd:Math.max(1,parseInt(q)||1)}:x));
   const freteVal=parseFloat(f.frete)||0;
   const valorBase=sel.length>0?subtotal:(parseFloat(f.valor)||0);
-  const total=valorBase+(f.tipo_entrega==="entrega"?freteVal:0);
+  const valorComExt=valorBase+subtotalExt;
+  const total=valorComExt+(f.tipo_entrega==="entrega"?freteVal:0);
   const itensStr=sel.map(p=>isKg(p)?`${(p.peso||1).toString().replace('.',',')}kg ${p.nome}`:p.qtd>1?`${p.qtd}x ${p.nome}`:p.nome).join(" + ");
-  const handleSave=()=>{if(!f.cliente.trim())return alert("Preencha o nome!");if(sel.length===0&&!f.itens.trim())return alert("Selecione um produto.");const entradaVal=parseFloat(entradaInput)||0;onSave({...f,itens:sel.length>0?itensStr:f.itens,valor:sel.length>0?subtotal:(parseFloat(f.valor)||0),frete:f.tipo_entrega==="entrega"?freteVal:0,pago:statusPag==="pago",pagoParcial:statusPag==="parcial"&&statusPag!=="pago",entrada:statusPag==="parcial"?entradaVal:statusPag==="pago"?total:0});};
+  const handleSave=()=>{if(!f.cliente.trim())return alert("Preencha o nome!");if(sel.length===0&&!f.itens.trim())return alert("Selecione um produto.");const entradaVal=parseFloat(entradaInput)||0;const extStr=extSel.length>0?" + Extras: "+extSel.map(a=>(a.qtd>1?a.qtd+"x ":"")+a.nome).join(", "):"";onSave({...f,itens:(sel.length>0?itensStr:f.itens)+extStr,valor:valorComExt,acessoriosSel:extSel,frete:f.tipo_entrega==="entrega"?freteVal:0,pago:statusPag==="pago",pagoParcial:statusPag==="parcial"&&statusPag!=="pago",entrada:statusPag==="parcial"?entradaVal:statusPag==="pago"?total:0});};
   const inp=(label,key,type="text",ph="")=>(<div style={{marginBottom:12}}><label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>{label}</label><input type={type} value={f[key]||""} onChange={e=>set(key,e.target.value)} placeholder={ph} style={{width:"100%",padding:"9px 12px",borderRadius:10,border:"1.5px solid #f0dde4",fontSize:13,outline:"none",boxSizing:"border-box"}}/></div>);
   return(<div style={{position:"fixed",inset:0,background:"rgba(180,48,74,.18)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:900,padding:16}}><div style={{background:"#fff",borderRadius:20,padding:24,width:"100%",maxWidth:560,boxShadow:"0 8px 40px rgba(180,48,74,.18)",maxHeight:"92vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}><h3 style={{margin:0,color:RE,fontSize:17}}>{f.id?"✏️ Editar":"✨ Novo Pedido"}</h3><button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#ccc"}}>×</button></div>{inp("Cliente *","cliente","text","Nome")}{inp("Telefone","telefone","tel","(11) 99999-9999")}<div style={{marginBottom:14}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}><label style={{fontSize:10,color:"#aaa",textTransform:"uppercase",letterSpacing:1}}>🍫 Produtos</label>{sel.length>0&&<span style={{fontSize:11,color:RE,fontWeight:700}}>{sel.length} sel.</span>}</div><div style={{display:"flex",gap:6,marginBottom:6}}><input value={busca} onChange={e=>setBusca(e.target.value)} placeholder="🔍 Buscar..." style={{flex:1,padding:"7px 10px",borderRadius:8,border:"1.5px solid #f0dde4",fontSize:12,outline:"none"}}/><select value={cat} onChange={e=>setCat(e.target.value)} style={{padding:"7px 8px",borderRadius:8,border:"1.5px solid #f0dde4",fontSize:11,outline:"none",color:"#555",maxWidth:130}}>{cats.map(c=><option key={c} value={c}>{c}</option>)}</select></div><div style={{maxHeight:160,overflowY:"auto",border:"1.5px solid #f0dde4",borderRadius:10,padding:4}}>{fil.map((p,i)=>{const s=sel.find(x=>x.nome===p.nome);return(<div key={i} onClick={()=>tog(p)} style={{padding:"7px 10px",borderRadius:8,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,background:s?RC:"transparent",borderLeft:s?`3px solid ${RE}`:"3px solid transparent",marginBottom:2}}><div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}><span style={{fontSize:12,fontWeight:s?700:400}}>{p.nome}</span>{(p.unidade||"un")==="kg"&&<span style={{padding:"1px 6px",borderRadius:20,background:"#fff8ec",color:AM,fontSize:9,fontWeight:700,border:`1px solid ${AM}`}}>⚖️/kg</span>}</div>{p.obs&&<div style={{fontSize:10,color:"#bbb"}}>{p.obs}</div>}</div><div style={{textAlign:"right"}}><div style={{fontSize:12,fontWeight:700,color:RE}}>{fmt(p.preco)}{(p.unidade||"un")==="kg"&&<span style={{fontSize:9,color:"#aaa"}}>/kg</span>}</div></div>{s&&<span style={{fontSize:14,color:RE}}>✓</span>}</div>);})}</div>{sel.length>0&&(<div style={{marginTop:10,background:RC,borderRadius:12,padding:12}}>{sel.map((p,i)=>{const ehKg=isKg(p);return(<div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,background:"#fff",borderRadius:8,padding:"7px 10px",flexWrap:"wrap"}}>
   <div style={{flex:1,minWidth:120,fontSize:12,fontWeight:600}}>{p.nome}{ehKg&&<span style={{marginLeft:4,fontSize:10,color:ROSA,fontWeight:700}}>⚖️ kg</span>}</div>
@@ -452,9 +597,55 @@ function FormModal({initial,onSave,onClose,cardapio}){
   </div>
   <button onClick={e=>{e.stopPropagation();tog(p);}} style={{background:"none",border:"none",color:"#e07070",cursor:"pointer",fontSize:14,padding:0}}>✕</button>
 </div>);})}<div style={{display:"flex",justifyContent:"space-between",paddingTop:10,borderTop:`1.5px solid ${RM}`,marginTop:4}}><span style={{fontSize:12,color:"#888"}}>{sel.length} produto(s)</span><span style={{fontSize:16,fontWeight:700,color:RE}}>Subtotal: {fmt(subtotal)}</span></div></div>)}</div>{sel.length===0&&(<div style={{marginBottom:12}}><label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Manual</label><input value={f.itens} onChange={e=>set("itens",e.target.value)} placeholder="Ex: Ovo personalizado..." style={{width:"100%",padding:"9px 12px",borderRadius:10,border:"1.5px solid #f0dde4",fontSize:13,outline:"none",boxSizing:"border-box"}}/></div>)}<div style={{display:"grid",gridTemplateColumns:sel.length>0?"1fr":"1fr 1fr",gap:10}}>{sel.length===0&&<div>{inp("Valor (R$)","valor","number","0,00")}</div>}<div style={{gridColumn:sel.length>0?"1/-1":"auto"}}>{inp("Data retirada","data_retirada","date")}</div></div><div style={{marginBottom:12}}><label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:1}}>Tipo</label><div style={{display:"flex",gap:8}}>{["retirada","entrega"].map(t=>(<button key={t} onClick={()=>set("tipo_entrega",t)} style={{flex:1,padding:"8px",borderRadius:10,border:"1.5px solid",borderColor:f.tipo_entrega===t?RE:"#f0dde4",background:f.tipo_entrega===t?RC:"#fff",color:f.tipo_entrega===t?RE:"#aaa",fontSize:12,fontWeight:700,cursor:"pointer"}}>{t==="retirada"?"🏪 Retirada":"🚚 Entrega"}</button>))}</div></div>{f.tipo_entrega==="entrega"&&(<><div style={{marginBottom:12}}>{inp("Endereço","endereco","text","Rua, número...")}</div><div style={{marginBottom:12}}><label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>🚚 Valor do Frete (R$)</label><div style={{display:"flex",alignItems:"center",gap:8}}><div style={{flex:1,display:"flex",alignItems:"center",gap:4,padding:"9px 12px",borderRadius:10,border:`1.5px solid ${AM}`,background:"#fffbe6"}}><span style={{fontSize:13,color:AM}}>🚚</span><input type="number" step="0.01" min="0" value={f.frete||""} onChange={e=>set("frete",e.target.value)} placeholder="0,00" style={{flex:1,border:"none",background:"transparent",fontSize:14,fontWeight:700,color:AM,outline:"none"}}/></div><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{[5,10,15,20].map(v=>(<button key={v} onClick={()=>set("frete",v)} style={{padding:"6px 10px",borderRadius:8,border:`1.5px solid ${f.frete==v?AM:"#f0dde4"}`,background:f.frete==v?"#fffbe6":"#fff",color:f.frete==v?AM:"#aaa",fontSize:11,fontWeight:700,cursor:"pointer"}}>{fmt(v)}</button>))}</div></div>{freteVal>0&&<div style={{marginTop:6,fontSize:11,color:AM}}>🚚 Frete: {fmt(freteVal)}</div>}</div></>)}<div style={{marginBottom:12}}><label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:1}}>💳 Pagamento</label><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{["PIX","Débito","Crédito","Dinheiro"].map(pg=>(<button key={pg} onClick={()=>set("forma_pagamento",pg)} style={{padding:"6px 14px",borderRadius:20,border:"1.5px solid",borderColor:f.forma_pagamento===pg?RE:"#f0dde4",background:f.forma_pagamento===pg?RC:"#fff",color:f.forma_pagamento===pg?RE:"#aaa",fontSize:12,fontWeight:700,cursor:"pointer"}}>{pg}</button>))}</div></div>{inp("Observações","observacoes","text","Sabor, personalização...")}
+
+        {/* ── ACESSÓRIOS / EXTRAS ── */}
+        {acessorios.length>0&&(
+          <div style={{marginBottom:14}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <label style={{fontSize:10,color:"#aaa",textTransform:"uppercase",letterSpacing:1}}>🎀 Acessórios & Extras</label>
+              {extSel.length>0&&<span style={{fontSize:11,color:ROSA,fontWeight:700}}>+{fmt(subtotalExt)}</span>}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,maxHeight:200,overflowY:"auto"}}>
+              {acessorios.map((a,i)=>{const sel2=extSel.find(x=>x.id===a.id);return(
+                <div key={i} onClick={()=>togExt(a)} style={{padding:"8px 10px",borderRadius:10,border:"1.5px solid",borderColor:sel2?ROSA:"#f0dde4",background:sel2?RC:"#fff",cursor:"pointer",transition:"all .15s",display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:18}}>{a.icon||"🎁"}</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:11,fontWeight:sel2?700:500,lineHeight:1.3}}>{a.nome}</div>
+                    <div style={{fontSize:11,fontWeight:700,color:RE,marginTop:1}}>{fmt(a.preco)}</div>
+                  </div>
+                  {sel2&&<span style={{fontSize:13,color:RE}}>✓</span>}
+                </div>
+              );})}
+            </div>
+            {extSel.length>0&&(
+              <div style={{marginTop:8,background:RC,borderRadius:10,padding:"10px 12px"}}>
+                <div style={{fontSize:10,color:"#aaa",fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Extras selecionados</div>
+                {extSel.map((a,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:5,background:"#fff",borderRadius:8,padding:"6px 10px"}}>
+                    <span style={{fontSize:14}}>{a.icon||"🎁"}</span>
+                    <span style={{flex:1,fontSize:11,fontWeight:600}}>{a.nome}</span>
+                    <div style={{display:"flex",alignItems:"center",gap:3}}>
+                      <button onClick={e=>{e.stopPropagation();setExtQtd(a.id,(a.qtd||1)-1);}} style={{width:20,height:20,borderRadius:"50%",border:`1px solid ${RM}`,background:"#fff",color:RE,fontSize:12,cursor:"pointer",lineHeight:1}}>−</button>
+                      <input type="number" min="1" value={a.qtd||1} onChange={e=>{e.stopPropagation();setExtQtd(a.id,e.target.value);}} style={{width:28,textAlign:"center",border:`1px solid ${RM}`,borderRadius:5,fontSize:11,padding:"1px 2px",outline:"none"}}/>
+                      <button onClick={e=>{e.stopPropagation();setExtQtd(a.id,(a.qtd||1)+1);}} style={{width:20,height:20,borderRadius:"50%",border:"none",background:RE,color:"#fff",fontSize:12,cursor:"pointer",lineHeight:1}}>+</button>
+                    </div>
+                    <span style={{fontSize:11,fontWeight:700,color:RE,minWidth:60,textAlign:"right"}}>{fmt(a.preco*(a.qtd||1))}</span>
+                    <button onClick={e=>{e.stopPropagation();togExt(a);}} style={{background:"none",border:"none",color:"#e07070",cursor:"pointer",fontSize:13,padding:0}}>✕</button>
+                  </div>
+                ))}
+                <div style={{display:"flex",justifyContent:"space-between",paddingTop:8,borderTop:`1px solid ${RM}`,marginTop:2}}>
+                  <span style={{fontSize:11,color:"#888"}}>Subtotal extras</span>
+                  <span style={{fontSize:13,fontWeight:700,color:ROSA}}>{fmt(subtotalExt)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {total>0&&(
           <div style={{marginBottom:14,background:RC,borderRadius:12,padding:"12px 14px",border:`1.5px solid ${RM}`}}>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#888",marginBottom:4}}><span>🍫 Produtos</span><span style={{fontWeight:700,color:"#555"}}>{fmt(valorBase)}</span></div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#888",marginBottom:4}}><span>🎂 Produtos</span><span style={{fontWeight:700,color:"#555"}}>{fmt(valorBase)}</span></div>
+            {subtotalExt>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#888",marginBottom:4}}><span>🎀 Acessórios</span><span style={{fontWeight:700,color:ROSA}}>{fmt(subtotalExt)}</span></div>}
             {freteVal>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#888",marginBottom:4}}><span>🚚 Frete</span><span style={{fontWeight:700,color:AM}}>{fmt(freteVal)}</span></div>}
             <div style={{display:"flex",justifyContent:"space-between",fontSize:15,borderTop:`1.5px solid ${RM}`,paddingTop:8,marginTop:4}}><span style={{fontWeight:700,color:RE}}>💵 Total</span><span style={{fontWeight:700,color:RE}}>{fmt(total)}</span></div>
           </div>
@@ -777,6 +968,10 @@ function App(){
   const[extrasCardapio,setExtrasCardapio]=useState(()=>{
     try{const s=localStorage.getItem("celinas-diario-extras");return s?JSON.parse(s):[]}catch{return[];}
   });
+  const[acessoriosBase,setAcessoriosBase]=useState(()=>{
+    try{const s=localStorage.getItem("celinas-diario-acessorios");return s?JSON.parse(s):ACESSORIOS_DEFAULT;}catch{return ACESSORIOS_DEFAULT;}
+  });
+  useEffect(()=>{try{localStorage.setItem("celinas-diario-acessorios",JSON.stringify(acessoriosBase));}catch{}},[acessoriosBase]);
   const[buscaPedido,setBuscaPedido]=useState("");
 
   const[custos,setCustos]=useState(()=>{
@@ -821,7 +1016,11 @@ function App(){
     try{localStorage.setItem("celinas-diario-precos",JSON.stringify(precos));}catch{}
   },[precos]);
 
-  const cardapio=useMemo(()=>[...CAD_BASE.map(p=>({...p,preco:precos[p.nome]??p.preco})),...(extrasCardapio||[]).map(p=>({...p,preco:precos[p.nome]??p.preco}))],[precos,extrasCardapio]);
+  const ocultos=useMemo(()=>new Set((extrasCardapio||[]).filter(p=>p._oculto).map(p=>p.nome)),[extrasCardapio]);
+  const cardapio=useMemo(()=>[
+    ...CAD_BASE.filter(p=>!ocultos.has(p.nome)).map(p=>({...p,preco:precos[p.nome]??p.preco})),
+    ...(extrasCardapio||[]).filter(p=>!p._oculto&&p.cat!=="__oculto__").map(p=>({...p,preco:precos[p.nome]??p.preco}))
+  ],[precos,extrasCardapio,ocultos]);
   const showToast=(msg,type="ok")=>{setToast({msg,type});setTimeout(()=>setToast(null),3000);};
   const persist=async n=>{setSaving(true);await apiSave(n);setSaving(false);};
   const saveOrder=async data=>{let n;if(data.id){n=orders.map(x=>x.id===data.id?{...x,...data}:x);showToast("Atualizado! 💾");}else{const novo={...data,id:nextId,status:"pendente"};n=[novo,...orders];setNextId(i=>i+1);showToast("Pedido criado! 🎂");}setOrders(n);setForm(null);await persist(n);};
@@ -1073,7 +1272,7 @@ function App(){
   },{});
 
   const exportBackup=()=>{
-    const payload={versao:"1.0",exportadoEm:new Date().toISOString(),app:"Celinas Cake",dados:{orders,precos,extrasCardapio,custos,prod}};
+    const payload={versao:"1.0",exportadoEm:new Date().toISOString(),app:"Celinas Cake",dados:{orders,precos,extrasCardapio,custos,prod,acessoriosBase}};
     const json=JSON.stringify(payload,null,2);
     const blob=new Blob([json],{type:"application/json;charset=utf-8;"});
     const url=URL.createObjectURL(blob);
@@ -1102,6 +1301,7 @@ function App(){
         if(dados.extrasCardapio)setExtrasCardapio(dados.extrasCardapio);
         if(dados.custos)setCustos(dados.custos);
         if(dados.prod)setProdState(dados.prod);
+        if(dados.acessoriosBase)setAcessoriosBase(dados.acessoriosBase);
         alert("✅ Backup importado com sucesso!");
       }catch(err){alert("❌ Erro ao ler o arquivo.\n"+err.message);}
       event.target.value="";
@@ -1621,7 +1821,7 @@ function App(){
         })()}
 
         {view==="whatsapp"&&<WhatsAppPage onSave={saveOrder}/>}
-        {view==="precos"&&<PrecosPage cardapio={cardapio} precos={precos} setPrecos={setPrecos} extrasCardapio={extrasCardapio} setExtrasCardapio={setExtrasCardapio}/>}
+        {view==="precos"&&<PrecosPage cardapio={cardapio} precos={precos} setPrecos={setPrecos} extrasCardapio={extrasCardapio} setExtrasCardapio={setExtrasCardapio} acessoriosBase={acessoriosBase} setAcessoriosBase={setAcessoriosBase}/>}
 
         {view==="dashboard"&&(<>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(175px,1fr))",gap:14,marginBottom:24}}>
@@ -1739,7 +1939,7 @@ function App(){
       </main>
 
       {showGerenciar&&<GerenciarUsuarios onClose={()=>setShowGerenciar(false)}/>}
-      {form!==null&&<FormModal initial={form} onSave={saveOrder} onClose={()=>setForm(null)} cardapio={cardapio}/>}
+      {form!==null&&<FormModal initial={form} onSave={saveOrder} onClose={()=>setForm(null)} cardapio={cardapio} acessorios={acessoriosBase}/>}
       {toast&&<div style={{position:"fixed",bottom:24,right:24,padding:"12px 20px",borderRadius:12,background:toast.type==="err"?"#e07070":RE,color:"#fff",fontSize:14,fontWeight:700,boxShadow:"0 4px 20px rgba(0,0,0,.15)",zIndex:999}}>{toast.msg}</div>}
     </div>
   );
