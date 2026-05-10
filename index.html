@@ -1119,7 +1119,7 @@ const VD={cal:2000,carb:300,prot:75,gord:55,gordSat:22,trans:0,fibra:25,sodio:24
 
 function NutricionalPage({receitas=[],salvarReceitas,cardapio=[]}){
   const[nomeProduto,setNomeProduto]=useState("");
-  const[produtoVinculado,setProdutoVinculado]=useState(""); // nome do produto do cardápio
+  const[produtoVinculado,setProdutoVinculado]=useState("");
   const[porcao,setPorcao]=useState(50);
   const[rendimento,setRendimento]=useState(10);
   const[ingredientes,setIngredientes]=useState([]);
@@ -1128,10 +1128,55 @@ function NutricionalPage({receitas=[],salvarReceitas,cardapio=[]}){
   const[saved,setSaved]=useState(false);
   const[receitaSel,setReceitaSel]=useState(null);
   const[buscaProd,setBuscaProd]=useState("");
-  const[abaDir,setAbaDir]=useState("tabela"); // tabela | vincular
+  const[abaDir,setAbaDir]=useState("tabela");
 
-  const grupos=["Todos",...Array.from(new Set(INGREDIENTES_DB.map(i=>i.grupo)))];
-  const filIng=INGREDIENTES_DB.filter(i=>(grupoFiltro==="Todos"||i.grupo===grupoFiltro)&&i.nome.toLowerCase().includes(busca.toLowerCase()));
+  // Ingredientes personalizados salvos pelo usuário
+  const[ingsCustom,setIngsCustom]=useState(()=>{
+    try{const s=localStorage.getItem("celinas-diario-ings");return s?JSON.parse(s):[];}catch{return[];}
+  });
+  const[showAddIng,setShowAddIng]=useState(false);
+  const[novoIng,setNovoIng]=useState({nome:"",cal:"",carb:"",prot:"",gord:"",gordSat:"",trans:"0",fibra:"",sodio:"",grupo:"Meus Ingredientes"});
+  const[errIng,setErrIng]=useState("");
+
+  const todoIngredientes=[...INGREDIENTES_DB,...ingsCustom];
+  const grupos=["Todos",...Array.from(new Set(todoIngredientes.map(i=>i.grupo)))];
+  const filIng=todoIngredientes.filter(i=>(grupoFiltro==="Todos"||i.grupo===grupoFiltro)&&i.nome.toLowerCase().includes(busca.toLowerCase()));
+
+  const salvarIngCustom=(lista)=>{
+    setIngsCustom(lista);
+    try{localStorage.setItem("celinas-diario-ings",JSON.stringify(lista));}catch{}
+  };
+
+  const addIngCustom=()=>{
+    if(!novoIng.nome.trim()) return setErrIng("Informe o nome do ingrediente.");
+    if(!novoIng.cal||isNaN(parseFloat(novoIng.cal))) return setErrIng("Informe as calorias por 100g.");
+    if(todoIngredientes.find(x=>x.nome.toLowerCase()===novoIng.nome.toLowerCase().trim())) return setErrIng("Já existe um ingrediente com esse nome.");
+    const novo={
+      nome:novoIng.nome.trim(),
+      cal:parseFloat(novoIng.cal)||0,
+      carb:parseFloat(novoIng.carb)||0,
+      prot:parseFloat(novoIng.prot)||0,
+      gord:parseFloat(novoIng.gord)||0,
+      gordSat:parseFloat(novoIng.gordSat)||0,
+      trans:parseFloat(novoIng.trans)||0,
+      fibra:parseFloat(novoIng.fibra)||0,
+      sodio:parseFloat(novoIng.sodio)||0,
+      grupo:novoIng.grupo||"Meus Ingredientes",
+      _custom:true,
+    };
+    salvarIngCustom([...ingsCustom,novo]);
+    setNovoIng({nome:"",cal:"",carb:"",prot:"",gord:"",gordSat:"",trans:"0",fibra:"",sodio:"",grupo:"Meus Ingredientes"});
+    setErrIng("");
+    setShowAddIng(false);
+    // já adiciona na receita automaticamente
+    setIngredientes(prev=>[...prev,{...novo,qtdG:100}]);
+  };
+
+  const excluirIngCustom=(nome)=>{
+    if(!window.confirm(`Remover "${nome}" da lista de ingredientes?`))return;
+    salvarIngCustom(ingsCustom.filter(x=>x.nome!==nome));
+    setIngredientes(prev=>prev.filter(x=>x.nome!==nome));
+  };
 
   const addIngrediente=(ing)=>{
     if(ingredientes.find(x=>x.nome===ing.nome))return;
@@ -1294,27 +1339,95 @@ function NutricionalPage({receitas=[],salvarReceitas,cardapio=[]}){
 
           {/* Busca de ingredientes */}
           <div style={{background:"#fff",borderRadius:14,padding:14,marginBottom:14,border:`1.5px solid ${RM}`}}>
-            <div style={{fontSize:11,fontWeight:700,color:"#aaa",textTransform:"uppercase",letterSpacing:1,marginBottom:10}}>🥣 Adicionar Ingredientes</div>
+            <div style={{display:"flex",alignItems:"center",marginBottom:10}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#aaa",textTransform:"uppercase",letterSpacing:1,flex:1}}>🥣 Ingredientes</div>
+              <button onClick={()=>{setShowAddIng(v=>!v);setErrIng("");}} style={{padding:"4px 12px",borderRadius:20,border:`1.5px solid ${showAddIng?ROSA:RM}`,background:showAddIng?RC:"#fff",color:showAddIng?ROSA:"#aaa",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                {showAddIng?"✕ Cancelar":"＋ Novo Ingrediente"}
+              </button>
+            </div>
+
+            {/* Formulário de novo ingrediente */}
+            {showAddIng&&(
+              <div style={{background:"#fdf9fb",border:`1.5px solid ${ROSA}`,borderRadius:12,padding:14,marginBottom:12}}>
+                <div style={{fontSize:12,fontWeight:700,color:ROSA,marginBottom:10}}>✨ Cadastrar novo ingrediente (valores por 100g)</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                  <div style={{gridColumn:"1/-1"}}>
+                    <label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Nome *</label>
+                    <input value={novoIng.nome} onChange={e=>setNovoIng(p=>({...p,nome:e.target.value}))} placeholder="Ex: Cream de Pistache" style={{width:"100%",padding:"8px 10px",borderRadius:8,border:`1.5px solid ${RM}`,fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+                  </div>
+                  <div>
+                    <label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Calorias (kcal) *</label>
+                    <input type="text" inputMode="decimal" value={novoIng.cal} onChange={e=>setNovoIng(p=>({...p,cal:e.target.value}))} placeholder="0" style={{width:"100%",padding:"8px 10px",borderRadius:8,border:`1.5px solid ${RM}`,fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+                  </div>
+                  <div>
+                    <label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Carboidratos (g)</label>
+                    <input type="text" inputMode="decimal" value={novoIng.carb} onChange={e=>setNovoIng(p=>({...p,carb:e.target.value}))} placeholder="0" style={{width:"100%",padding:"8px 10px",borderRadius:8,border:`1.5px solid ${RM}`,fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+                  </div>
+                  <div>
+                    <label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Proteínas (g)</label>
+                    <input type="text" inputMode="decimal" value={novoIng.prot} onChange={e=>setNovoIng(p=>({...p,prot:e.target.value}))} placeholder="0" style={{width:"100%",padding:"8px 10px",borderRadius:8,border:`1.5px solid ${RM}`,fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+                  </div>
+                  <div>
+                    <label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Gorduras Totais (g)</label>
+                    <input type="text" inputMode="decimal" value={novoIng.gord} onChange={e=>setNovoIng(p=>({...p,gord:e.target.value}))} placeholder="0" style={{width:"100%",padding:"8px 10px",borderRadius:8,border:`1.5px solid ${RM}`,fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+                  </div>
+                  <div>
+                    <label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Gorduras Saturadas (g)</label>
+                    <input type="text" inputMode="decimal" value={novoIng.gordSat} onChange={e=>setNovoIng(p=>({...p,gordSat:e.target.value}))} placeholder="0" style={{width:"100%",padding:"8px 10px",borderRadius:8,border:`1.5px solid ${RM}`,fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+                  </div>
+                  <div>
+                    <label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Fibras (g)</label>
+                    <input type="text" inputMode="decimal" value={novoIng.fibra} onChange={e=>setNovoIng(p=>({...p,fibra:e.target.value}))} placeholder="0" style={{width:"100%",padding:"8px 10px",borderRadius:8,border:`1.5px solid ${RM}`,fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+                  </div>
+                  <div>
+                    <label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Sódio (mg)</label>
+                    <input type="text" inputMode="decimal" value={novoIng.sodio} onChange={e=>setNovoIng(p=>({...p,sodio:e.target.value}))} placeholder="0" style={{width:"100%",padding:"8px 10px",borderRadius:8,border:`1.5px solid ${RM}`,fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+                  </div>
+                  <div style={{gridColumn:"1/-1"}}>
+                    <label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Grupo / Categoria</label>
+                    <input value={novoIng.grupo} onChange={e=>setNovoIng(p=>({...p,grupo:e.target.value}))} placeholder="Ex: Meus Ingredientes, Pastas, Frutas..." style={{width:"100%",padding:"8px 10px",borderRadius:8,border:`1.5px solid ${RM}`,fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+                  </div>
+                </div>
+                {errIng&&<div style={{fontSize:11,color:"#e05555",background:"#fff0f0",padding:"6px 10px",borderRadius:8,marginBottom:8}}>⚠️ {errIng}</div>}
+                <button onClick={addIngCustom} style={{width:"100%",padding:10,borderRadius:10,border:"none",background:`linear-gradient(135deg,${RE},${ROSA})`,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+                  ✅ Adicionar à lista e à receita
+                </button>
+              </div>
+            )}
+
+            {/* Filtros */}
             <div style={{display:"flex",gap:6,marginBottom:8,flexWrap:"wrap"}}>
               <input value={busca} onChange={e=>setBusca(e.target.value)} placeholder="🔍 Buscar ingrediente..." style={{flex:1,padding:"7px 10px",borderRadius:8,border:`1.5px solid ${RM}`,fontSize:12,outline:"none",minWidth:140}}/>
               <select value={grupoFiltro} onChange={e=>setGrupoFiltro(e.target.value)} style={{padding:"7px 8px",borderRadius:8,border:`1.5px solid ${RM}`,fontSize:11,outline:"none",color:"#555"}}>
                 {grupos.map(g=><option key={g} value={g}>{g}</option>)}
               </select>
             </div>
+
+            {/* Lista */}
             <div style={{maxHeight:200,overflowY:"auto",border:`1px solid #f0dde4`,borderRadius:10,padding:4}}>
+              {filIng.length===0&&<div style={{padding:"20px",textAlign:"center",color:"#ccc",fontSize:12}}>Nenhum ingrediente encontrado</div>}
               {filIng.map((ing,i)=>{
                 const jaTem=ingredientes.find(x=>x.nome===ing.nome);
+                const isCustom=!!ing._custom;
                 return(
-                  <div key={i} onClick={()=>!jaTem&&addIngrediente(ing)} style={{padding:"6px 10px",borderRadius:7,cursor:jaTem?"default":"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",background:jaTem?RC:"transparent",borderLeft:jaTem?`3px solid ${RE}`:"3px solid transparent",marginBottom:2,opacity:jaTem?0.6:1}}>
+                  <div key={i} style={{padding:"6px 10px",borderRadius:7,cursor:jaTem?"default":"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",background:jaTem?RC:"transparent",borderLeft:jaTem?`3px solid ${RE}`:isCustom?`3px solid ${ROSA}`:"3px solid transparent",marginBottom:2,opacity:jaTem?0.6:1}}
+                    onClick={()=>!jaTem&&addIngrediente(ing)}>
                     <div>
-                      <div style={{fontSize:12,fontWeight:jaTem?700:400}}>{ing.nome}</div>
-                      <div style={{fontSize:10,color:"#aaa"}}>{ing.grupo} · {ing.cal}kcal/100g</div>
+                      <div style={{display:"flex",alignItems:"center",gap:5}}>
+                        <span style={{fontSize:12,fontWeight:jaTem?700:400}}>{ing.nome}</span>
+                        {isCustom&&<span style={{fontSize:9,color:ROSA,fontWeight:700,padding:"1px 5px",borderRadius:20,background:RC,border:`1px solid ${RM}`}}>✨ meu</span>}
+                      </div>
+                      <div style={{fontSize:10,color:"#aaa"}}>{ing.grupo} · {ing.cal}kcal/100g · C:{ing.carb}g P:{ing.prot}g G:{ing.gord}g</div>
                     </div>
-                    {jaTem?<span style={{fontSize:12,color:RE}}>✓</span>:<span style={{fontSize:12,color:"#ccc"}}>+</span>}
+                    <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                      {jaTem?<span style={{fontSize:12,color:RE}}>✓</span>:<span style={{fontSize:12,color:"#ccc"}}>+</span>}
+                      {isCustom&&!jaTem&&<button onClick={e=>{e.stopPropagation();excluirIngCustom(ing.nome);}} style={{background:"none",border:"none",color:"#e07070",cursor:"pointer",fontSize:12,padding:"0 2px"}} title="Remover ingrediente">🗑️</button>}
+                    </div>
                   </div>
                 );
               })}
             </div>
+            {ingsCustom.length>0&&<div style={{fontSize:10,color:"#aaa",marginTop:6,textAlign:"right"}}>✨ {ingsCustom.length} ingrediente(s) personalizado(s) na lista</div>}
           </div>
 
           {/* Lista de ingredientes adicionados */}
