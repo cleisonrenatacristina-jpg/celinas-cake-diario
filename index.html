@@ -89,8 +89,31 @@ const getDias=(dr,ag)=>{if(!dr)return null;return Math.ceil((new Date(dr+"T00:00
 const getPrazo=(d,s)=>{if(s==="entregue"||d===null)return null;if(d<0)return{label:`${Math.abs(d)}d atrasado`,color:"#e05555",bg:"#fff0f0",icon:"🚨"};if(d===0)return{label:"Hoje!",color:"#e07020",bg:"#fff5e0",icon:"⚡"};if(d===1)return{label:"Amanhã",color:AM,bg:"#fffbe6",icon:"⏰"};if(d<=3)return{label:`${d}d`,color:ROSA,bg:RC,icon:"📅"};return{label:`${d}d`,color:"#888",bg:"#f5f5f5",icon:"📅"};};
 const getBadge=o=>({bg:o.pago?"#eaf5f1":o.pagoParcial?"#fff8ec":"#fff5e0",color:o.pago?VE:o.pagoParcial?AM:"#e8a020",text:o.pago?"💰 Pago":o.pagoParcial?`💛 Entrada ${fmt(o.entrada||0)}`:"⏳ A pagar"});
 
-async function apiLoad(){try{const s=localStorage.getItem("celinas-diario-orders");return s?JSON.parse(s):[];}catch(e){return[];}}
-async function apiSave(orders){try{localStorage.setItem("celinas-diario-orders",JSON.stringify(orders));}catch(e){}}
+async function apiLoad(){
+  try{
+    const r=await fetch(`${SHEETS_URL}?action=load&sheet=diario`);
+    const d=await r.json();
+    if(d.ok&&d.orders?.length>0){
+      // atualiza cache local
+      try{localStorage.setItem("celinas-diario-orders",JSON.stringify(d.orders));}catch{}
+      return d.orders;
+    }
+  }catch(e){}
+  // fallback: usa cache local se offline
+  try{const s=localStorage.getItem("celinas-diario-orders");return s?JSON.parse(s):[];}catch{return[];}
+}
+async function apiSave(orders){
+  // salva no cache local imediatamente (funciona offline)
+  try{localStorage.setItem("celinas-diario-orders",JSON.stringify(orders));}catch{}
+  // salva no Google Sheets (sincroniza entre dispositivos)
+  try{
+    const p=new URLSearchParams();
+    p.append("action","save");
+    p.append("sheet","diario");
+    p.append("orders",JSON.stringify(orders));
+    await fetch(SHEETS_URL,{method:"POST",body:p});
+  }catch(e){}
+}
 async function apiIA(msg){try{const p=new URLSearchParams();p.append("action","ia");p.append("msg",msg);const r=await fetch(SHEETS_URL,{method:"POST",body:p});const d=await r.json();if(d.ok)return JSON.parse(d.result);}catch(e){}return null;}
 
 const {useState,useEffect,useMemo,useRef}=React;
@@ -1352,7 +1375,7 @@ function App(){
         const totalPedidos=(dados.orders||[]).length;
         const confirma=window.confirm(`📂 Backup encontrado:\n\n• ${totalPedidos} pedido(s)\n• Exportado em: ${payload.exportadoEm?new Date(payload.exportadoEm).toLocaleString("pt-BR"):"Data desconhecida"}\n\n⚠️ Isso VAI SUBSTITUIR todos os dados atuais.\nDeseja continuar?`);
         if(!confirma)return;
-        if(dados.orders){setOrders(dados.orders);await apiSave(dados.orders);}
+        if(dados.orders){setOrders(dados.orders);await apiSave(dados.orders);} // apiSave já sincroniza com Sheets
         if(dados.precos)setPrecos(dados.precos);
         if(dados.extrasCardapio)setExtrasCardapio(dados.extrasCardapio);
         if(dados.custos)setCustos(dados.custos);
@@ -1371,7 +1394,7 @@ function App(){
         <div style={{maxWidth:1080,margin:"0 auto",padding:"14px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
             <div style={{width:48,height:48,borderRadius:12,overflow:"hidden",background:"#fff",padding:3}}><img src={LOGO} alt="Logo" style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:9}}/></div>
-            <div><div style={{fontSize:20,fontWeight:"bold",fontStyle:"italic",color:"#fff",letterSpacing:1}}>Celina's Cake</div><div style={{fontSize:9,letterSpacing:3,color:"rgba(255,255,255,.6)",textTransform:"uppercase"}}>🎂 Produção Diária · {saving?"💾 salvando...":"✓ salvo"}</div></div>
+            <div><div style={{fontSize:20,fontWeight:"bold",fontStyle:"italic",color:"#fff",letterSpacing:1}}>Celina's Cake</div><div style={{fontSize:9,letterSpacing:3,color:"rgba(255,255,255,.6)",textTransform:"uppercase"}}>🎂 Produção Diária · {saving?"☁️ sincronizando...":"✓ sincronizado"}</div></div>
           </div>
           <nav style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
             {[["dashboard","📊 Painel"],["whatsapp","💬 WhatsApp"],["pedidos","📋 Pedidos"],["producao","🏭 Produção"],["custos","💹 Lucro"],["cardapio","📋 Cardápio"],["precos","💲 & Preços"]].map(([v,l])=>(
