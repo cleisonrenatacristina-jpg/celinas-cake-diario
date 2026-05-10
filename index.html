@@ -75,8 +75,8 @@ const getDias=(dr,ag)=>{if(!dr)return null;return Math.ceil((new Date(dr+"T00:00
 const getPrazo=(d,s)=>{if(s==="entregue"||d===null)return null;if(d<0)return{label:`${Math.abs(d)}d atrasado`,color:"#e05555",bg:"#fff0f0",icon:"🚨"};if(d===0)return{label:"Hoje!",color:"#e07020",bg:"#fff5e0",icon:"⚡"};if(d===1)return{label:"Amanhã",color:AM,bg:"#fffbe6",icon:"⏰"};if(d<=3)return{label:`${d}d`,color:ROSA,bg:RC,icon:"📅"};return{label:`${d}d`,color:"#888",bg:"#f5f5f5",icon:"📅"};};
 const getBadge=o=>({bg:o.pago?"#eaf5f1":o.pagoParcial?"#fff8ec":"#fff5e0",color:o.pago?VE:o.pagoParcial?AM:"#e8a020",text:o.pago?"💰 Pago":o.pagoParcial?`💛 Entrada ${fmt(o.entrada||0)}`:"⏳ A pagar"});
 
-async function apiLoad(){try{const r=await fetch(`${SHEETS_URL}?action=load`);const d=await r.json();if(d.ok&&d.orders?.length>0)return d.orders;}catch(e){}return[];}
-async function apiSave(orders){try{const p=new URLSearchParams();p.append("action","save");p.append("orders",JSON.stringify(orders));await fetch(SHEETS_URL,{method:"POST",body:p});}catch(e){}}
+async function apiLoad(){try{const s=localStorage.getItem("celinas-diario-orders");return s?JSON.parse(s):[];}catch(e){return[];}}
+async function apiSave(orders){try{localStorage.setItem("celinas-diario-orders",JSON.stringify(orders));}catch(e){}}
 async function apiIA(msg){try{const p=new URLSearchParams();p.append("action","ia");p.append("msg",msg);const r=await fetch(SHEETS_URL,{method:"POST",body:p});const d=await r.json();if(d.ok)return JSON.parse(d.result);}catch(e){}return null;}
 
 const {useState,useEffect,useMemo,useRef}=React;
@@ -87,12 +87,12 @@ function WaBubble({msg,side,hora}){return(<div style={{display:"flex",justifyCon
 function WhatsAppPage({onSave}){
   const h=()=>new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
   const ini=[{s:"left",t:"Oi!! Quero fazer um pedido 😊",h:""},{s:"right",t:"Olá! Bem-vinda à Celina's Cake 🎂🌸\nQual seria o seu pedido?",h:h()}];
-  const[msgs,setMsgs]=useState(()=>{try{const s=localStorage.getItem("celinas-wa");return s?JSON.parse(s):ini;}catch{return ini;}});
+  const[msgs,setMsgs]=useState(()=>{try{const s=localStorage.getItem("celinas-diario-wa");return s?JSON.parse(s):ini;}catch{return ini;}});
   const[inp,setInp]=useState("");const[load,setLoad]=useState(false);const[prev,setPrev]=useState(null);const[copiado,setCopiado]=useState(false);
   const ref=useRef(null);
 
-  useEffect(()=>{try{localStorage.setItem("celinas-wa",JSON.stringify(msgs));}catch{}if(ref.current)ref.current.scrollTop=ref.current.scrollHeight;},[msgs]);
-  const limpar=()=>{setMsgs(ini);setPrev(null);try{localStorage.removeItem("celinas-wa");}catch{}};
+  useEffect(()=>{try{localStorage.setItem("celinas-diario-wa",JSON.stringify(msgs));}catch{}if(ref.current)ref.current.scrollTop=ref.current.scrollHeight;},[msgs]);
+  const limpar=()=>{setMsgs(ini);setPrev(null);try{localStorage.removeItem("celinas-diario-wa");}catch{}};
 
   const copiar=()=>{
     if(!prev)return;
@@ -475,7 +475,7 @@ function parseParte(parte) {
 // SISTEMA DE LOGIN
 // ============================================================
 const ADMIN_MASTER={usuario:"Cleison",senha:"810823",role:"admin"};
-const USUARIOS_KEY="celinas-usuarios";
+const USUARIOS_KEY="celinas-diario-usuarios";
 const SESSION_KEY="celinas-session";
 
 function getUsuarios(){
@@ -720,7 +720,7 @@ function App(){
 
   const[view,setView]=useState("pedidos");
   const[orders,setOrders]=useState([]);
-  const[prod,setProdState]=useState(()=>{try{const s=localStorage.getItem("celinas-prod");return s?JSON.parse(s):{}}catch{return{};}});
+  const[prod,setProdState]=useState(()=>{try{const s=localStorage.getItem("celinas-diario-prod");return s?JSON.parse(s):{}}catch{return{};}});
   const setProd=function(k,v){var n=Object.assign({},prod);n[k]=Math.max(0,parseInt(v)||0);setProdState(n);};
   const[form,setForm]=useState(null);
   const[filter,setFilter]=useState("todos");
@@ -730,7 +730,7 @@ function App(){
   const[agora,setAgora]=useState(new Date());
   const[nextId,setNextId]=useState(1);
   const[precos,setPrecos]=useState(()=>{
-    try{const s=localStorage.getItem("celinas-precos");return s?JSON.parse(s):Object.fromEntries(CAD_BASE.map(p=>[p.nome,p.preco]));}catch{return Object.fromEntries(CAD_BASE.map(p=>[p.nome,p.preco]));}
+    try{const s=localStorage.getItem("celinas-diario-precos");return s?JSON.parse(s):Object.fromEntries(CAD_BASE.map(p=>[p.nome,p.preco]));}catch{return Object.fromEntries(CAD_BASE.map(p=>[p.nome,p.preco]));}
   });
   const[catFiltro,setCatFiltro]=useState("Todas");
   const[showFiltros,setShowFiltros]=useState(false);
@@ -739,23 +739,23 @@ function App(){
   const[filtroValMax,setFiltroValMax]=useState("");
   const[filtroPago,setFiltroPago]=useState("todos");
   const[extrasCardapio,setExtrasCardapio]=useState(()=>{
-    try{const s=localStorage.getItem("celinas-extras");return s?JSON.parse(s):[]}catch{return[];}
+    try{const s=localStorage.getItem("celinas-diario-extras");return s?JSON.parse(s):[]}catch{return[];}
   });
   const[buscaPedido,setBuscaPedido]=useState("");
 
   const[custos,setCustos]=useState(()=>{
-    try{const s=localStorage.getItem("celinas-custos");return s?JSON.parse(s):CUSTOS_DEFAULT;}catch{return CUSTOS_DEFAULT;}
+    try{const s=localStorage.getItem("celinas-diario-custos");return s?JSON.parse(s):CUSTOS_DEFAULT;}catch{return CUSTOS_DEFAULT;}
   });
   const[custoNovo,setCustoNovo]=useState({nome:"",cat:"Matéria Prima",valor:""});
 
   useEffect(()=>{
-    try{localStorage.setItem("celinas-custos",JSON.stringify(custos));}catch{}
+    try{localStorage.setItem("celinas-diario-custos",JSON.stringify(custos));}catch{}
   },[custos]);
 
   const updCusto=(id,campo,valor)=>{
     setCustos(prev=>{
       const novo=prev.map(c=>c.id===id?{...c,[campo]:campo==="valor"?parseFloat(valor)||0:valor}:c);
-      try{localStorage.setItem("celinas-custos",JSON.stringify(novo));}catch{}
+      try{localStorage.setItem("celinas-diario-custos",JSON.stringify(novo));}catch{}
       return novo;
     });
   };
@@ -764,25 +764,25 @@ function App(){
     const novo={id:Date.now(),cat:custoNovo.cat,nome:custoNovo.nome.trim(),valor:parseFloat(custoNovo.valor)||0};
     setCustos(prev=>{
       const n=[...prev,novo];
-      try{localStorage.setItem("celinas-custos",JSON.stringify(n));}catch{}
+      try{localStorage.setItem("celinas-diario-custos",JSON.stringify(n));}catch{}
       return n;
     });
     setCustoNovo({nome:"",cat:"Matéria Prima",valor:""});
   };
   const delCusto=(id)=>setCustos(prev=>{
     const n=prev.filter(c=>c.id!==id);
-    try{localStorage.setItem("celinas-custos",JSON.stringify(n));}catch{}
+    try{localStorage.setItem("celinas-diario-custos",JSON.stringify(n));}catch{}
     return n;
   });
 
   useEffect(()=>{
-    try{localStorage.setItem("celinas-prod",JSON.stringify(prod));}catch{}
+    try{localStorage.setItem("celinas-diario-prod",JSON.stringify(prod));}catch{}
   },[prod]);
   useEffect(()=>{
-    try{localStorage.setItem("celinas-extras",JSON.stringify(extrasCardapio));}catch{}
+    try{localStorage.setItem("celinas-diario-extras",JSON.stringify(extrasCardapio));}catch{}
   },[extrasCardapio]);
   useEffect(()=>{
-    try{localStorage.setItem("celinas-precos",JSON.stringify(precos));}catch{}
+    try{localStorage.setItem("celinas-diario-precos",JSON.stringify(precos));}catch{}
   },[precos]);
 
   const cardapio=useMemo(()=>[...CAD_BASE.map(p=>({...p,preco:precos[p.nome]??p.preco})),...(extrasCardapio||[]).map(p=>({...p,preco:precos[p.nome]??p.preco}))],[precos,extrasCardapio]);
