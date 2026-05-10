@@ -539,6 +539,19 @@ function PagBtn({order,onUpdate}){
 function PedidoCard({o,idx,agora,isDuplicata,onStatus,onPagto,onEdit,onDelete}){
   const st=ST[o.status]||ST.pendente;const dias=getDias(o.data_retirada,agora);const prazo=getPrazo(dias,o.status);const bp=getBadge(o);
   const totalComFrete=(o.valor||0)+(o.frete||0);
+
+  // Botão WhatsApp — só aparece para pedidos com entrega amanhã ou hoje
+  const abrirWhatsLembrete=()=>{
+    const dt=o.data_retirada?new Date(o.data_retirada+"T12:00").toLocaleDateString("pt-BR"):"";
+    const tipo=o.tipo_entrega==="entrega"?"entrega":"retirada";
+    const msg=`🔔 *Lembrete Celina's Cake*\n\nAmanhã é a ${tipo} do pedido de *${o.cliente}*!\n\n🎂 *${o.itens}*\n💵 ${fmt(totalComFrete)}\n📅 ${dt}${o.endereco?"\n📍 "+o.endereco:""}\n\n⚠️ Não esqueça de preparar! 👩‍🍳`;
+    const tel=o.telefone?o.telefone.replace(/\D/g,""):"";
+    const url=tel?`https://wa.me/55${tel}?text=${encodeURIComponent(msg)}`:`https://wa.me/?text=${encodeURIComponent(msg)}`;
+    window.open(url,"_blank");
+  };
+
+  const showWaBtn = dias !== null && dias <= 1 && o.status !== "entregue";
+
   return(<div style={{background:"#fff",borderRadius:16,padding:"16px 18px",boxShadow:"0 2px 12px rgba(180,48,74,.07)",borderLeft:`5px solid ${prazo?.color||st.color}`,display:"flex",gap:14,alignItems:"flex-start",flexWrap:"wrap",marginBottom:12}}>{o.status!=="entregue"&&<div style={{display:"flex",flexDirection:"column",alignItems:"center",minWidth:34,gap:2,paddingTop:2}}><div style={{width:30,height:30,borderRadius:"50%",background:prazo?.color||RM,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:13}}>{idx+1}</div><div style={{fontSize:9,color:"#ccc",textTransform:"uppercase"}}>fila</div></div>}<div style={{flex:1,minWidth:180}}><div style={{display:"flex",alignItems:"center",gap:7,marginBottom:5,flexWrap:"wrap"}}><span style={{fontSize:16}}>{st.icon}</span><span style={{fontWeight:700,fontSize:15}}>{o.cliente}</span>{isDuplicata&&<span style={{padding:"2px 7px",borderRadius:20,fontSize:11,fontWeight:700,background:"#fff8ec",color:"#c47a00",border:"1px solid #e8a020"}}>⚠️ duplicado?</span>}<span style={{padding:"2px 7px",borderRadius:20,fontSize:11,fontWeight:700,background:st.bg,color:st.color}}>{st.label}</span><span style={{padding:"2px 7px",borderRadius:20,fontSize:11,fontWeight:700,background:bp.bg,color:bp.color}}>{bp.text}</span>{prazo&&<span style={{padding:"2px 7px",borderRadius:20,fontSize:11,fontWeight:700,background:prazo.bg,color:prazo.color}}>{prazo.icon} {prazo.label}</span>}</div><div style={{fontSize:13,color:"#555",marginBottom:3}}>🥚 {o.itens}</div><div style={{display:"flex",gap:10,fontSize:11,color:"#999",flexWrap:"wrap"}}>{o.telefone&&<span>📞 {o.telefone}</span>}{o.data_retirada&&<span>📅 {new Date(o.data_retirada+"T12:00").toLocaleDateString("pt-BR")}{dias!==null&&o.status!=="entregue"?` · ${dias<0?Math.abs(dias)+"d atrasado":dias===0?"hoje":dias+"d restantes"}`:""}</span>}{o.valor!=null&&<span>💵 {fmt(o.valor)}{o.frete>0?` + 🚚 ${fmt(o.frete)} = ${fmt(totalComFrete)}`:""}</span>}{o.endereco&&<span>📍 {o.endereco}</span>}</div>{o.observacoes&&<div style={{marginTop:4,fontSize:11,color:"#bbb",fontStyle:"italic"}}>📝 {o.observacoes}</div>}
 {o.acessoriosSel&&o.acessoriosSel.length>0&&(
   <div style={{marginTop:4,display:"flex",gap:4,flexWrap:"wrap"}}>
@@ -547,6 +560,13 @@ function PedidoCard({o,idx,agora,isDuplicata,onStatus,onPagto,onEdit,onDelete}){
         {a.icon||"🎁"} {a.qtd>1?a.qtd+"x ":""}{a.nome} {fmt(a.preco*(a.qtd||1))}
       </span>
     ))}
+  </div>
+)}
+{showWaBtn&&(
+  <div style={{marginTop:8}}>
+    <button onClick={abrirWhatsLembrete} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:10,border:"none",background:"#25d366",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",boxShadow:"0 2px 8px rgba(37,211,102,.35)"}}>
+      <span style={{fontSize:16}}>📲</span> Enviar lembrete no WhatsApp
+    </button>
   </div>
 )}</div><div style={{display:"flex",flexDirection:"column",gap:5,minWidth:155}}><div style={{fontSize:10,color:"#ccc",textTransform:"uppercase",letterSpacing:1}}>Status</div>{Object.entries(ST).map(([k,v])=><button key={k} onClick={()=>onStatus(o.id,k)} style={{padding:"4px 10px",borderRadius:8,border:"1.5px solid",borderColor:o.status===k?v.color:"#f0dde4",background:o.status===k?v.bg:"#fff",color:o.status===k?v.color:"#bbb",fontSize:11,fontWeight:700,cursor:"pointer",textAlign:"left"}}>{v.icon} {v.label}</button>)}<div style={{marginTop:4}}><div style={{fontSize:10,color:"#ccc",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Pagamento</div><PagBtn order={{...o,valor:totalComFrete}} onUpdate={onPagto}/></div><div style={{display:"flex",gap:5,marginTop:4}}><button onClick={()=>onEdit(o)} style={{flex:1,padding:"5px 0",borderRadius:8,border:`1.5px solid ${RM}`,background:RC,color:RE,fontSize:11,cursor:"pointer"}}>✏️</button><button onClick={()=>onDelete(o.id)} style={{flex:1,padding:"5px 0",borderRadius:8,border:"1.5px solid #ffd0cc",background:"#fff5f4",color:"#e07070",fontSize:11,cursor:"pointer"}}>🗑️</button></div></div></div>);
 }
@@ -1241,9 +1261,45 @@ function App(){
   useEffect(()=>{
     const t=setInterval(()=>setAgora(new Date()),60000);
     const timeout=setTimeout(()=>setLoading(false),8000);
-    apiLoad().then(data=>{clearTimeout(timeout);if(data.length>0){setOrders(data);setNextId(Math.max(...data.map(o=>o.id||0))+1);}setLoading(false);}).catch(()=>{clearTimeout(timeout);setLoading(false);});
+    apiLoad().then(data=>{
+      clearTimeout(timeout);
+      if(data.length>0){setOrders(data);setNextId(Math.max(...data.map(o=>o.id||0))+1);}
+      setLoading(false);
+      // ── Notificações do navegador após carregar pedidos ──
+      setTimeout(()=>dispararNotificacoes(data),1500);
+    }).catch(()=>{clearTimeout(timeout);setLoading(false);});
     return()=>{clearInterval(t);clearTimeout(timeout);};
   },[]);
+
+  const dispararNotificacoes=(lista)=>{
+    const hoje=new Date();hoje.setHours(0,0,0,0);
+    const amanha=new Date(hoje);amanha.setDate(amanha.getDate()+1);
+    const pedidosAmanha=lista.filter(o=>{
+      if(o.status==="entregue")return false;
+      if(!o.data_retirada)return false;
+      const d=new Date(o.data_retirada+"T00:00:00");
+      return d.getTime()===amanha.getTime();
+    });
+    if(!pedidosAmanha.length)return;
+    // Pede permissão e dispara notificação
+    if(!("Notification" in window))return;
+    const enviar=()=>{
+      pedidosAmanha.forEach(o=>{
+        try{
+          new Notification("🔔 Lembrete Celina's Cake",{
+            body:`Amanhã: pedido de ${o.cliente} — ${o.itens}`,
+            icon:"https://static.ifood-static.com.br/image/upload/t_thumbnail/logosgde/118fefb7-ed84-42c0-af19-c3c81521be3d/202009252306_A4Vw_i.jpg",
+            tag:`pedido-${o.id}`,
+            requireInteraction:true,
+          });
+        }catch(e){}
+      });
+    };
+    if(Notification.permission==="granted"){enviar();}
+    else if(Notification.permission!=="denied"){
+      Notification.requestPermission().then(p=>{if(p==="granted")enviar();});
+    }
+  };
 
   if(loading)return(<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#fdf4f6",flexDirection:"column",gap:16}}><div style={{fontSize:48}}>🎂</div><div style={{fontSize:16,color:RE,fontWeight:700}}>Carregando pedidos...</div></div>);
 
@@ -1337,6 +1393,54 @@ function App(){
       </header>
 
       <main style={{maxWidth:1080,margin:"0 auto",padding:"24px 20px"}}>
+        {/* ── PAINEL DE LEMBRETES — ENTREGAS AMANHÃ ── */}
+        {(()=>{
+          const amanha=new Date(agora);amanha.setHours(0,0,0,0);amanha.setDate(amanha.getDate()+1);
+          const amanhaStr=amanha.toISOString().slice(0,10);
+          const pedidosAmanha=orders.filter(o=>o.data_retirada===amanhaStr&&o.status!=="entregue");
+          if(!pedidosAmanha.length)return null;
+          const abrirWaGrupo=()=>{
+            const lista=pedidosAmanha.map((o,i)=>`${i+1}. *${o.cliente}* — ${o.itens}`).join("\n");
+            const msg=`🔔 *Lembretes de amanhã — Celina's Cake*\n\n${pedidosAmanha.length} pedido(s) para preparar hoje:\n\n${lista}\n\n👩‍🍳 Bora produzir!`;
+            window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,"_blank");
+          };
+          return(
+            <div style={{background:"linear-gradient(135deg,#e8f5e9,#fff8e1)",border:"2px solid #25d366",borderRadius:16,padding:"14px 18px",marginBottom:20}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,flexWrap:"wrap"}}>
+                <span style={{fontSize:22}}>📲</span>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:700,color:"#1a7a3a",fontSize:15}}>{pedidosAmanha.length} pedido(s) para entregar amanhã!</div>
+                  <div style={{fontSize:11,color:"#555",marginTop:1}}>Prepare hoje para não atrasar 👩‍🍳</div>
+                </div>
+                <button onClick={abrirWaGrupo} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 16px",borderRadius:22,border:"none",background:"#25d366",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",boxShadow:"0 2px 8px rgba(37,211,102,.4)"}}>
+                  📲 Enviar lista no WhatsApp
+                </button>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {pedidosAmanha.map(o=>{
+                  const tipo=o.tipo_entrega==="entrega"?"🚚 Entrega":"🏪 Retirada";
+                  const tel=o.telefone?o.telefone.replace(/\D/g,""):"";
+                  const msg=`🔔 *Lembrete Celina's Cake*\n\nAmanhã é a ${o.tipo_entrega==="entrega"?"entrega":"retirada"} do pedido de *${o.cliente}*!\n\n🎂 *${o.itens}*\n💵 ${fmt((o.valor||0)+(o.frete||0))}\n📅 ${new Date(o.data_retirada+"T12:00").toLocaleDateString("pt-BR")}${o.endereco?"\n📍 "+o.endereco:""}\n\n⚠️ Não esqueça de preparar! 👩‍🍳`;
+                  const waUrl=tel?`https://wa.me/55${tel}?text=${encodeURIComponent(msg)}`:`https://wa.me/?text=${encodeURIComponent(msg)}`;
+                  return(
+                    <div key={o.id} style={{background:"#fff",borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",borderLeft:"4px solid #25d366"}}>
+                      <div style={{flex:1}}>
+                        <span style={{fontWeight:700,fontSize:13,color:"#1a7a3a"}}>{o.cliente}</span>
+                        <span style={{fontSize:12,color:"#555",marginLeft:8}}>{o.itens}</span>
+                        <span style={{fontSize:11,color:"#888",marginLeft:8}}>{tipo}</span>
+                      </div>
+                      <span style={{fontSize:12,fontWeight:700,color:"#1a7a3a"}}>{fmt((o.valor||0)+(o.frete||0))}</span>
+                      <a href={waUrl} target="_blank" style={{display:"flex",alignItems:"center",gap:4,padding:"5px 12px",borderRadius:20,background:"#25d366",color:"#fff",fontSize:11,fontWeight:700,textDecoration:"none"}}>
+                        <span>📲</span> Lembrar
+                      </a>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
         {atrasados.length>0&&(<div style={{background:"#fff0f0",border:"2px solid #e05555",borderRadius:16,padding:"14px 18px",marginBottom:20}}><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}><span style={{fontSize:22}}>🚨</span><div style={{fontWeight:700,color:"#e05555",fontSize:15}}>{atrasados.length} pedido(s) atrasado(s)!</div></div>{atrasados.map(o=>(<div key={o.id} style={{background:"#fff",borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",borderLeft:"4px solid #e05555",marginBottom:6}}><div style={{flex:1}}><span style={{fontWeight:700,fontSize:13}}>{o.cliente}</span><span style={{fontSize:12,color:"#aaa",marginLeft:8}}>{o.itens}</span></div><span style={{fontSize:11,color:"#e05555",fontWeight:700}}>{Math.abs(getDias(o.data_retirada,agora))}d atrasado</span><button onClick={()=>updSt(o.id,"entregue")} style={{padding:"4px 10px",borderRadius:8,border:"none",background:"#e05555",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer"}}>Marcar entregue</button></div>))}</div>)}
 
         {/* ============================================================ */}
