@@ -664,6 +664,7 @@ function PedidoCard({o,idx,agora,isDuplicata,onStatus,onPagto,onEdit,onDelete,re
     )}
   </div>
 )}
+{showWaBtn&&(
   <div style={{marginTop:8}}>
     <button onClick={abrirWhatsLembrete} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:10,border:"none",background:"#25d366",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",boxShadow:"0 2px 8px rgba(37,211,102,.35)"}}>
       <span style={{fontSize:16}}>📲</span> Enviar lembrete no WhatsApp
