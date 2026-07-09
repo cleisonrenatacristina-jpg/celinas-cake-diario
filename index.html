@@ -854,7 +854,13 @@ const USUARIOS_KEY="celinas-diario-usuarios";
 const SESSION_KEY="celinas-session";
 
 function getUsuarios(){
-  try{const s=sessionStorage.getItem(USUARIOS_KEY+"_runtime")||localStorage.getItem(USUARIOS_KEY);return s?JSON.parse(s):[ADMIN_MASTER];}catch{return[ADMIN_MASTER];}
+  try{
+    const s=sessionStorage.getItem(USUARIOS_KEY+"_runtime")||localStorage.getItem(USUARIOS_KEY);
+    const lista=s?JSON.parse(s):[ADMIN_MASTER];
+    // a senha master sempre vem do código-fonte, nunca do cache salvo no navegador
+    const semMaster=lista.filter(u=>u.usuario.toLowerCase()!==ADMIN_MASTER.usuario.toLowerCase());
+    return [ADMIN_MASTER,...semMaster];
+  }catch{return[ADMIN_MASTER];}
 }
 function saveUsuarios(lista){
   try{localStorage.setItem(USUARIOS_KEY,JSON.stringify(lista));}catch{}
